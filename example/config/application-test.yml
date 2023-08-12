@@ -1,0 +1,23 @@
+auth:
+  type: OAUTH2
+  oauth2:
+    client:
+      okta:
+        clientId: <client-id>
+        clientSecret: <client-secret>
+        scope: [ 'openid', 'profile', 'email', 'groups' ]
+        client-name: Okta
+        provider: okta
+        redirect-uri: "{baseUrl}/login/oauth2/code/okta"
+        authorization-grant-type: authorization_code
+        issuer-uri: https://<okta-endpoint>
+        authorization-uri: <okta-endpoint>/oauth2/v1/authorize
+        token-uri: <okta-endpoint>/oauth2/v1/token
+        user-info-uri: <okta-endpoint>/oauth2/v1/userinfo
+        jwk-set-uri: <okta-endpoint>/oauth2/v1/keys
+        user-name-attribute: email
+        custom-params:
+          type: oauth
+          roles-field: groups
+server:
+  port: 8080
