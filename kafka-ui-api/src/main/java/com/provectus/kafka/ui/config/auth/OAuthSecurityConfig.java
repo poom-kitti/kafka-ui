@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import com.provectus.kafka.ui.util.WebClientConfigurator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.jetbrains.annotations.Nullable;
@@ -33,6 +34,7 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.logout.ServerLogoutSuccessHandler;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 @Configuration
@@ -46,8 +48,15 @@ public class OAuthSecurityConfig extends AbstractAuthSecurityConfig {
 
   private final OAuthProperties properties;
 
+  // Create WebClient that respects proxy settings
+  private WebClient webClient = new WebClientConfigurator().build();
+
   @Bean
-  public SecurityWebFilterChain configure(ServerHttpSecurity http, OAuthLogoutSuccessHandler logoutHandler) {
+  public SecurityWebFilterChain configure(
+      ServerHttpSecurity http,
+      OAuthLogoutSuccessHandler logoutHandler,
+      CustomOidcAuthenticationManagerBuilder oidcAuthenticationManagerBuilder
+  ) {
     log.info("Configuring OAUTH2 authentication.");
 
     return http.authorizeExchange(spec -> spec
@@ -56,7 +65,7 @@ public class OAuthSecurityConfig extends AbstractAuthSecurityConfig {
             .anyExchange()
             .authenticated()
         )
-        .oauth2Login(Customizer.withDefaults())
+        .oauth2Login(spec -> spec.authenticationManager(oidcAuthenticationManagerBuilder.build())) // Use custom authentication manager
         .logout(spec -> spec.logoutSuccessHandler(logoutHandler))
         .csrf(ServerHttpSecurity.CsrfSpec::disable)
         .build();
@@ -64,7 +73,10 @@ public class OAuthSecurityConfig extends AbstractAuthSecurityConfig {
 
   @Bean
   public ReactiveOAuth2UserService<OidcUserRequest, OidcUser> customOidcUserService(AccessControlService acs) {
+    // Use WebClient that respects proxy settings to get user-info
     final OidcReactiveOAuth2UserService delegate = new OidcReactiveOAuth2UserService();
+    delegate.setOauth2UserService(customOauth2UserService(acs));
+
     return request -> delegate.loadUser(request)
         .flatMap(user -> {
           var provider = getProviderByProviderId(request.getClientRegistration().getRegistrationId());
@@ -80,7 +92,10 @@ public class OAuthSecurityConfig extends AbstractAuthSecurityConfig {
 
   @Bean
   public ReactiveOAuth2UserService<OAuth2UserRequest, OAuth2User> customOauth2UserService(AccessControlService acs) {
+    // Use WebClient that respects proxy settings to get user-info
     final DefaultReactiveOAuth2UserService delegate = new DefaultReactiveOAuth2UserService();
+    delegate.setWebClient(webClient);
+
     return request -> delegate.loadUser(request)
         .flatMap(user -> {
           var provider = getProviderByProviderId(request.getClientRegistration().getRegistrationId());
